@@ -1,52 +1,126 @@
-'use client'
+"use client";
 
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Home, BarChart2, Truck, LogOut } from 'lucide-react';
+import { useState } from "react";
+import { Home, BarChart2, Truck, LogOut } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { supabase } from "@/utils/supabase/client";
 
 export default function SidebarNavigation() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
 
-  const toggleSidebar = () => {
-    setCollapsed(!collapsed);
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      router.push("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  };
+
+  const isActive = (path: string) => {
+    if (path === "/dashboard" && pathname === "/dashboard") return true;
+    if (path === "/peramalan" && pathname === "/peramalan") return true;
+    if (path === "/pemantauan" && pathname.includes("/pemantauan")) return true;
+    return false;
   };
 
   return (
-    <div className={`${collapsed ? 'w-16' : 'w-48'} bg-white border-r border-blue-100 flex flex-col justify-between transition-all duration-500 ease-in-out shadow-sm`}>
-      <div>
-        <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-center'} h-20 border-blue-100 px-4`}>
-          {!collapsed && <div className="text-4xl font-bold text-blue-600 transition-opacity duration-500">❄️</div>}
-          {collapsed && <div className="text-2xl font-bold text-blue-600 transition-opacity duration-500">❄️</div>}
-          <button 
-            onClick={toggleSidebar} 
-            className="p-1.5 rounded-full hover:bg-blue-50 transition-colors duration-300"
+    <div
+      className={`h-full fixed text-sm left-0 bg-white border-r border-gray-200 shadow-sm transition-all duration-300 ${
+        isExpanded ? "w-48" : "w-16"
+      } z-10`}
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
+    >
+      <div className="flex flex-col">
+        {/* Navigation Links */}
+        <nav className="flex flex-col space-y-1 p-3 flex-grow">
+          <a
+            href="/management/dashboard"
+            className={`flex items-center p-3 rounded-lg transition-all duration-200 ${
+              isActive("/dashboard")
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
           >
-            {collapsed ? <ChevronRight size={18} className="text-blue-500" /> : <ChevronLeft size={18} className="text-blue-500" />}
-          </button>
-        </div>
-        <nav className="flex flex-col p-4 space-y-4 text-gray-700">
-          <a href="/dashboard" className={`flex items-center hover:text-blue-600 rounded-lg p-2 hover:bg-blue-50 transition-all duration-300 ${collapsed ? 'justify-center' : ''}`}>
-            <Home size={20} className={`transition-all duration-300 ${collapsed ? "mx-auto" : "mr-2"} text-blue-500`} />
-            {!collapsed && <span className="transition-opacity duration-500">Dashboard</span>}
+            <Home
+              size={16}
+              className={`transition-all duration-300 flex-shrink-0 ${
+                isActive("/dashboard") ? "text-blue-600" : "text-gray-500"
+              }`}
+            />
+            <span
+              className={`ml-3 transition-opacity duration-300 whitespace-nowrap ${
+                isExpanded ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              Dashboard
+            </span>
           </a>
-          <a href="/forecast" className={`flex items-center hover:text-blue-600 rounded-lg p-2 hover:bg-blue-50 transition-all duration-300 ${collapsed ? 'justify-center' : ''}`}>
-            <BarChart2 size={20} className={`transition-all duration-300 ${collapsed ? "mx-auto" : "mr-2"} text-blue-500`} />
-            {!collapsed && <span className="transition-opacity duration-500">Forecasting</span>}
+
+          <a
+            href="/management/peramalan"
+            className={`flex items-center p-3 rounded-lg transition-all duration-200 ${
+              isActive("/peramalan")
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <BarChart2
+              size={16}
+              className={`transition-all duration-300 flex-shrink-0 ${
+                isActive("/peramalan") ? "text-blue-600" : "text-gray-500"
+              }`}
+            />
+            <span
+              className={`ml-3 transition-opacity duration-300 whitespace-nowrap ${
+                isExpanded ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              Peramalan
+            </span>
           </a>
-          <a href="/monitoring" className={`flex items-center hover:text-blue-600 rounded-lg p-2 hover:bg-blue-50 transition-all duration-300 ${collapsed ? 'justify-center' : ''}`}>
-            <Truck size={20} className={`transition-all duration-300 ${collapsed ? "mx-auto" : "mr-2"} text-blue-500`} />
-            {!collapsed && <span className="transition-opacity duration-500">Delivery</span>}
+
+          <a
+            href="/management/pemantauan"
+            className={`flex items-center p-3 rounded-lg transition-all duration-200 ${
+              isActive("/pemantauan")
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <Truck
+              size={16}
+              className={`transition-all duration-300 flex-shrink-0 ${
+                isActive("/pemantauan") ? "text-blue-600" : "text-gray-500"
+              }`}
+            />
+            <span
+              className={`ml-3 transition-opacity duration-300 whitespace-nowrap ${
+                isExpanded ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              Pemantauan
+            </span>
           </a>
         </nav>
-      </div>
-      <div className={`p-4 flex flex-col space-y-3 ${collapsed ? 'items-center' : ''}`}>
-        {/* <a href="/settings" className={`hover:text-blue-600 rounded-lg p-2 hover:bg-blue-50 transition-all duration-300 flex items-center ${collapsed ? 'justify-center' : ''}`}>
-          <Settings size={20} className={`transition-all duration-300 ${collapsed ? "mx-auto" : "mr-2"} text-blue-500`} />
-          {!collapsed && <span className="transition-opacity duration-500">Settings</span>}
-        </a> */}
-        <button className={`${collapsed ? 'justify-center' : ''} text-red-500 font-medium flex items-center rounded-lg p-2 hover:bg-red-50 transition-all duration-300`}>
-          <LogOut size={20} className={`transition-all duration-300 ${collapsed ? "mx-auto" : "mr-2"}`} />
-          {!collapsed && <span className="transition-opacity duration-500">Logout</span>}
-        </button>
+
+        {/* Logout Button positioned at 1/10 from bottom */}
+        <div className="absolute bottom-1/4 w-full p-3 border-t border-gray-200 bg-white">
+          <button 
+            onClick={handleLogout} 
+            className="flex w-full items-center p-3 rounded-lg transition-all duration-200 text-gray-600 hover:bg-red-50"
+          >
+            <LogOut size={20} className="flex-shrink-0 text-gray-500 transition-all duration-200" />
+            <span className={`ml-3 transition-opacity duration-300 whitespace-nowrap ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>
+              Keluar
+            </span>
+          </button>
+        </div>
+
       </div>
     </div>
   );
