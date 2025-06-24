@@ -20,9 +20,6 @@ interface SensorData {
 }
 
 export default function MonitoringPage() {
-  // State untuk filter pengiriman
-  const [activeFilter, setActiveFilter] = useState<"Rencana" | "In Transit" | "Riwayat">("In Transit");
-
   // State to store real-time sensor data
   const [sensorData, setSensorData] = useState<SensorData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -35,7 +32,6 @@ export default function MonitoringPage() {
   useEffect(() => {
     const checkUserRole = async () => {
       try {
-        
         // Get current session
         const { data, error: sessionError } = await supabase.auth.getSession();
         
@@ -45,16 +41,12 @@ export default function MonitoringPage() {
           return;
         }
 
-        console.log(data)
-
         // Check if session exists
         if (!data.session) {
           console.log("No session found, redirecting to login");
           router.push('/login');
           return;
         }
-
-        console.log("Session found:", data.session.user.id);
         
         // Get user profile with role information
         const { data: profile, error: profileError } = await supabase
@@ -113,10 +105,10 @@ export default function MonitoringPage() {
     
     checkUserRole();
   }, [router]);
-  
-  // Filter pengiriman berdasarkan status yang aktif
-  const filteredDeliveries = deliveries.filter(
-    (delivery) => delivery.status === activeFilter
+
+  // Filter for only In Transit deliveries
+  const inTransitDeliveries = deliveries.filter(
+    (delivery) => delivery.status === "In Transit"
   );
 
   // Fetch sensor data from Supabase and set up subscription
@@ -216,50 +208,34 @@ export default function MonitoringPage() {
         <div className="flex-1 ml-16 bg-gray-50"> {/* ml-16 to offset the sidebar width */}
           <div className="flex h-full">
             <div className="w-1/4 p-4 space-y-3 overflow-y-auto">
-              {/* Segmented Control */}
-              <div className="flex w-full bg-gray-100 rounded-lg p-1">
-                {(["Rencana", "In Transit", "Riwayat"] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                      activeFilter === filter
-                        ? "bg-white shadow-sm text-blue-600"
-                        : "text-gray-500 hover:text-gray-700"
-                    }`}
-                    onClick={() => setActiveFilter(filter)}
-                  >
-                    {filter}
-                  </button>
-                ))}
-              </div>
-
+              {/* Page Title */}
+              <h1 className="text-lg font-semibold text-gray-800 mb-2">Pengiriman Aktif</h1>
+              
               {/* Real-time temperature data indicator */}
               {sensorData.length > 0 && (
                 <div className="bg-white p-3 rounded-lg shadow-sm border border-blue-100">
-                  <h3 className="font-medium text-sm mb-2">Latest Sensor Data</h3>
+                  <h3 className="font-medium text-sm mb-2">Data Sensor Terkini</h3>
                   <div className="text-sm">
-                    <p>Temperature: <span className="font-bold text-blue-600">{sensorData[0].temperature}°C</span></p>
-                    <p>Time: {new Date(sensorData[0].recorded_at).toLocaleTimeString()}</p>
+                    <p>Temperatur: <span className="font-bold text-blue-600">{sensorData[0].temperature}°C</span></p>
+                    <p>Waktu: {new Date(sensorData[0].recorded_at).toLocaleTimeString()}</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      {loading ? "Updating..." : `Last updated ${new Date().toLocaleTimeString()}`}
+                      {loading ? "Memperbarui..." : `Terakhir diperbarui ${new Date().toLocaleTimeString()}`}
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* Tampilkan pengiriman yang sudah difilter */}
-              {filteredDeliveries.length > 0 ? (
-                filteredDeliveries.map((delivery) => (
+              {/* Display In Transit deliveries only */}
+              {inTransitDeliveries.length > 0 ? (
+                inTransitDeliveries.map((delivery) => (
                   <DeliveryCard
                     key={delivery.deliveryNumber}
-                    {...(delivery as {
-                      status: "Rencana" | "In Transit" | "Riwayat" | "Cancelled";
-                    } & Omit<typeof delivery, "status">)}
+                    {...delivery}
                   />
                 ))
               ) : (
-                <div className="text-center p-4 text-gray-500">
-                  Tidak ada pengiriman dengan status {activeFilter}
+                <div className="text-center p-4 text-gray-500 bg-white rounded-lg shadow-sm">
+                  Tidak ada pengiriman sedang berlangsung
                 </div>
               )}
             </div>

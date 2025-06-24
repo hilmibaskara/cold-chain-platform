@@ -10,7 +10,7 @@ interface DeliveryStep {
 export interface DeliveryCardProps {
   deliveryNumber: string;
   date: string;
-  status: 'In Transit' | 'Riwayat' | 'Rencana' | 'Cancelled';
+  status: string; // Changed from enum to string to accept any status value
   coolboxId: string;
   driver: string;
   temperatureThreshold: string;
@@ -39,9 +39,12 @@ const DeliveryCard: React.FC<DeliveryCardProps> = ({
       case 'Delivered':
         return 'bg-green-500';
       case 'Pending':
+      case 'Rencana':
         return 'bg-yellow-500';
       case 'Cancelled':
         return 'bg-red-500';
+      case 'Riwayat':
+        return 'bg-gray-500';
       default:
         return 'bg-gray-500';
     }

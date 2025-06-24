@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Home, BarChart2, Truck, LogOut } from "lucide-react";
+import { Home, BarChart2, Truck, LogOut, Settings, ActivitySquare } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/utils/supabase/client";
 
@@ -21,8 +21,9 @@ export default function SidebarNavigation() {
   };
 
   const isActive = (path: string) => {
-    if (path === "/dashboard" && pathname === "/dashboard") return true;
+    if (path === "/dashboard" && pathname.includes("/dashboard")) return true;
     if (path === "/peramalan" && pathname === "/peramalan") return true;
+    if (path === "/pengiriman" && pathname === "/pengiriman") return true;
     if (path === "/pemantauan" && pathname.includes("/pemantauan")) return true;
     return false;
   };
@@ -85,6 +86,29 @@ export default function SidebarNavigation() {
           </a>
 
           <a
+            href="/management/pengiriman"
+            className={`flex items-center p-3 rounded-lg transition-all duration-200 ${
+              isActive("/pengiriman")
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <Truck
+              size={16}
+              className={`transition-all duration-300 flex-shrink-0 ${
+                isActive("/pengiriman") ? "text-blue-600" : "text-gray-500"
+              }`}
+            />
+            <span
+              className={`ml-3 transition-opacity duration-300 whitespace-nowrap ${
+                isExpanded ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              Pengiriman
+            </span>
+          </a>
+
+          <a
             href="/management/pemantauan"
             className={`flex items-center p-3 rounded-lg transition-all duration-200 ${
               isActive("/pemantauan")
@@ -92,7 +116,7 @@ export default function SidebarNavigation() {
                 : "text-gray-600 hover:bg-gray-100"
             }`}
           >
-            <Truck
+            <ActivitySquare
               size={16}
               className={`transition-all duration-300 flex-shrink-0 ${
                 isActive("/pemantauan") ? "text-blue-600" : "text-gray-500"
@@ -110,17 +134,39 @@ export default function SidebarNavigation() {
 
         {/* Logout Button positioned at 1/10 from bottom */}
         <div className="absolute bottom-1/4 w-full p-3 border-t border-gray-200 bg-white">
+                  {/* Settings Button */}
+          <a
+            href="/management/settings"
+            className={`flex items-center p-3 rounded-lg transition-all duration-200 ${
+              isActive("/settings")
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <Settings
+              size={16}
+              className={`transition-all duration-300 flex-shrink-0 ${
+                isActive("/settings") ? "text-blue-600" : "text-gray-500"
+              }`}
+            />
+            <span
+              className={`ml-3 transition-opacity duration-300 whitespace-nowrap ${
+                isExpanded ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              Pengaturan
+            </span>
+          </a>
           <button 
             onClick={handleLogout} 
             className="flex w-full items-center p-3 rounded-lg transition-all duration-200 text-gray-600 hover:bg-red-50"
           >
-            <LogOut size={20} className="flex-shrink-0 text-gray-500 transition-all duration-200" />
+            <LogOut size={16} className="flex-shrink-0 text-gray-500 transition-all duration-200" />
             <span className={`ml-3 transition-opacity duration-300 whitespace-nowrap ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>
               Keluar
             </span>
           </button>
         </div>
-
       </div>
     </div>
   );
