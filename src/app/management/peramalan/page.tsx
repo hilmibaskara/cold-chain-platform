@@ -239,14 +239,18 @@ export default function ForecastResults() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <HeaderBar />
+      {/* Header - Fixed position */}
+      <div className="fixed top-0 left-0 right-0 z-50">
+        <HeaderBar />
+      </div>
       
-      {/* Sidebar */}
-      <SidebarNavigation />
+      {/* Sidebar - Fixed position */}
+      <div className="fixed top-12 left-0 bottom-0 z-40">
+        <SidebarNavigation />
+      </div>
       
-      {/* Main Content */}
-      <div className="ml-16">
+      {/* Main Content - Add top padding and left margin */}
+      <div className="ml-16 pt-16">
         <div className="p-6">
           {/* Header Section */}
           <div className="mb-6">
