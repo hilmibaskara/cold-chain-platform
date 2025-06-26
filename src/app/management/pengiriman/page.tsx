@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/utils/supabase/client";
 import HeaderBar from "@/components/HeaderBar";
 import SidebarNavigation from "@/components/SidebarNavigation";
@@ -17,7 +17,6 @@ import {
   AlertCircle,
   XCircle,
   User,
-  Save,
 } from "lucide-react";
 import dayjs from "dayjs";
 
@@ -46,6 +45,7 @@ interface Delivery {
   drivers?: {
     id: string;
     name: string;
+    role: string;
   };
 }
 
@@ -63,17 +63,13 @@ export default function DeliveryList() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [updatingDrivers, setUpdatingDrivers] = useState<Set<number>>(
-    new Set()
-  );
-  const [pendingChanges, setPendingChanges] = useState<Map<number, string>>(
-    new Map()
-  );
-
-  useEffect(() => {
-    fetchDeliveries();
-    fetchDrivers();
-  }, [statusFilter]);
+  const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    id_driver: "",
+    plan_start_time: "",
+    plan_end_time: "",
+  });
 
   const fetchDrivers = async () => {
     const { data, error } = await supabase
@@ -88,7 +84,7 @@ export default function DeliveryList() {
     }
   };
 
-  const fetchDeliveries = async () => {
+  const fetchDeliveries = useCallback(async () => {
     setLoading(true);
 
     let query = supabase
@@ -132,73 +128,87 @@ export default function DeliveryList() {
       setDeliveries([]);
     } else {
       // Transform the data to flatten the nested structure
-      const transformedData =
-        data?.map((delivery) => ({
-          ...delivery,
-          drivers: delivery.drivers?.profiles,
-        })) || [];
+      const transformedData = (data?.map((delivery) => ({
+        ...delivery,
+        drivers: Array.isArray(delivery.profiles) && delivery.profiles.length > 0 
+          ? delivery.profiles[0] 
+          : delivery.profiles,
+      })) || []) as Delivery[];
 
       setDeliveries(transformedData);
     }
 
     setLoading(false);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fetchDeliveries();
+    fetchDrivers();
+  }, [fetchDeliveries]);
+
+  const openModal = (delivery: Delivery) => {
+    setSelectedDelivery(delivery);
+    setFormData({
+      id_driver: delivery.id_driver || "",
+      plan_start_time: delivery.plan_start_time ? dayjs(delivery.plan_start_time).format("HH:mm") : "",
+      plan_end_time: delivery.plan_end_time ? dayjs(delivery.plan_end_time).format("HH:mm") : "",
+    });
+    setIsModalOpen(true);
   };
 
-  const handleDriverChange = (deliveryId: number, driverId: string) => {
-    setPendingChanges((prev) => {
-      const newMap = new Map(prev);
-      if (driverId) {
-        newMap.set(deliveryId, driverId);
-      } else {
-        newMap.delete(deliveryId);
-      }
-      return newMap;
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setSelectedDelivery(null);
+    setFormData({
+      id_driver: "",
+      plan_start_time: "",
+      plan_end_time: "",
     });
   };
 
-  const handleSaveDriverChange = async (deliveryId: number) => {
-    const driverId = pendingChanges.get(deliveryId);
-    if (driverId === undefined) return;
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDelivery) return;
 
-    setUpdatingDrivers((prev) => new Set(prev).add(deliveryId));
+    const updateData: Record<string, string | null> = {};
+    
+    // Update driver
+    if (formData.id_driver !== selectedDelivery.id_driver) {
+      updateData.id_driver = formData.id_driver || null;
+    }
+
+    // Update times - combine with existing date
+    if (formData.plan_start_time) {
+      const baseDate = selectedDelivery.plan_date;
+      const startDateTime = dayjs(baseDate).hour(parseInt(formData.plan_start_time.split(':')[0])).minute(parseInt(formData.plan_start_time.split(':')[1])).toISOString();
+      updateData.plan_start_time = startDateTime;
+    }
+
+    if (formData.plan_end_time) {
+      const baseDate = selectedDelivery.plan_date;
+      const endDateTime = dayjs(baseDate).hour(parseInt(formData.plan_end_time.split(':')[0])).minute(parseInt(formData.plan_end_time.split(':')[1])).toISOString();
+      updateData.plan_end_time = endDateTime;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      closeModal();
+      return;
+    }
 
     const { error } = await supabase
       .from("deliveries")
-      .update({ id_driver: driverId || null })
-      .eq("id_delivery", deliveryId);
+      .update(updateData)
+      .eq("id_delivery", selectedDelivery.id_delivery);
 
     if (error) {
-      console.error("Error updating driver:", error);
-      alert("Gagal mengupdate driver");
+      console.error("Error updating delivery:", error);
+      alert("Gagal mengupdate data pengiriman");
     } else {
-      // Update local state
-      setDeliveries((prev) =>
-        prev.map((delivery) =>
-          delivery.id_delivery === deliveryId
-            ? {
-                ...delivery,
-                id_driver: driverId || undefined,
-                drivers: driverId
-                  ? drivers.find((d) => d.id === driverId)
-                  : undefined,
-              }
-            : delivery
-        )
-      );
-
-      // Remove from pending changes
-      setPendingChanges((prev) => {
-        const newMap = new Map(prev);
-        newMap.delete(deliveryId);
-        return newMap;
-      });
+      // Refresh data
+      await fetchDeliveries();
+      closeModal();
+      alert("Data pengiriman berhasil diupdate");
     }
-
-    setUpdatingDrivers((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(deliveryId);
-      return newSet;
-    });
   };
 
   const getStatusIcon = (status: string) => {
@@ -402,15 +412,6 @@ export default function DeliveryList() {
                   </thead>
                   <tbody>
                     {deliveries.map((delivery) => {
-                      const hasPendingChange = pendingChanges.has(
-                        delivery.id_delivery
-                      );
-                      const pendingDriverId = pendingChanges.get(
-                        delivery.id_delivery
-                      );
-                      const currentDriverId =
-                        pendingDriverId ?? delivery.id_driver ?? "";
-
                       return (
                         <tr
                           key={delivery.id_delivery}
@@ -421,47 +422,16 @@ export default function DeliveryList() {
                           </td>
                           <td className="border-b border-gray-100 p-4">
                             <div className="flex items-center gap-2">
-                              <select
-                                value={currentDriverId}
-                                onChange={(e) =>
-                                  handleDriverChange(
-                                    delivery.id_delivery,
-                                    e.target.value
-                                  )
-                                }
-                                disabled={updatingDrivers.has(
-                                  delivery.id_delivery
-                                )}
-                                className={`text-gray-700 border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[140px] disabled:opacity-50 ${
-                                  hasPendingChange
-                                    ? "border-orange-300 bg-orange-50"
-                                    : "border-gray-300"
-                                }`}
-                              >
-                                <option value="">Pilih Driver</option>
-                                {drivers.map((driver) => (
-                                  <option key={driver.id} value={driver.id}>
-                                    {driver.name}
-                                  </option>
-                                ))}
-                              </select>
-                              {updatingDrivers.has(delivery.id_delivery) && (
-                                <RefreshCw
-                                  size={14}
-                                  className="animate-spin text-blue-600"
-                                />
+                              {delivery.drivers ? (
+                                <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
+                                  {delivery.drivers.name}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-sm">
+                                  Belum ditentukan
+                                </span>
                               )}
                             </div>
-                            {delivery.drivers && !hasPendingChange && (
-                              <div className="mt-1 text-xs text-gray-500">
-                                Saat ini: {delivery.drivers.name}
-                              </div>
-                            )}
-                            {hasPendingChange && (
-                              <div className="mt-1 text-xs text-orange-600">
-                                Ada perubahan yang belum disimpan
-                              </div>
-                            )}
                           </td>
                           <td className="border-b border-gray-100 p-4 text-sm text-gray-800">
                             {dayjs(delivery.plan_date).format("DD/MM/YYYY")}
@@ -571,22 +541,11 @@ export default function DeliveryList() {
                           </td>
                           <td className="border-b border-gray-100 p-4">
                             <button
-                              onClick={() =>
-                                handleSaveDriverChange(delivery.id_delivery)
-                              }
-                              disabled={
-                                !hasPendingChange ||
-                                updatingDrivers.has(delivery.id_delivery)
-                              }
-                              className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                                hasPendingChange &&
-                                !updatingDrivers.has(delivery.id_delivery)
-                                  ? "bg-blue-600 text-white hover:bg-blue-700"
-                                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                              }`}
+                              onClick={() => openModal(delivery)}
+                              className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
                             >
-                              <Save size={14} />
-                              Simpan
+                              <User size={14} />
+                              Lihat Selengkapnya
                             </button>
                           </td>
                         </tr>
@@ -599,6 +558,266 @@ export default function DeliveryList() {
           </div>
         </div>
       </div>
+
+      {/* Modal for Delivery Details */}
+      {isModalOpen && selectedDelivery && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-10 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  Detail Pengiriman DEL-{String(selectedDelivery.id_delivery).padStart(3, "0")}
+                </h2>
+                <button
+                  onClick={closeModal}
+                  className="text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <XCircle size={24} />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleFormSubmit} className="p-6 space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ID Pengiriman
+                  </label>
+                  <input
+                    type="text"
+                    value={`DEL-${String(selectedDelivery.id_delivery).padStart(3, "0")}`}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tanggal Rencana
+                  </label>
+                  <input
+                    type="text"
+                    value={dayjs(selectedDelivery.plan_date).format("DD/MM/YYYY")}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Status Pengiriman
+                  </label>
+                  <div className={getStatusBadge(selectedDelivery.delivery_status)}>
+                    {getStatusIcon(selectedDelivery.delivery_status)}
+                    {getStatusText(selectedDelivery.delivery_status)}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Threshold Suhu
+                  </label>
+                  <input
+                    type="text"
+                    value={`${selectedDelivery.temperature_threshold}°C`}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ID Container
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedDelivery.id_container || "Belum ditentukan"}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Status Kualitas
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedDelivery.quality_status || "Belum dimonitor"}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                  />
+                </div>
+              </div>
+
+              {/* Editable Fields */}
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-lg font-medium text-gray-800 mb-4">
+                  Data yang dapat diubah
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <User size={16} className="inline mr-1" />
+                      Driver
+                    </label>
+                    <select
+                      value={formData.id_driver}
+                      onChange={(e) =>
+                        setFormData({ ...formData, id_driver: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Pilih Driver</option>
+                      {drivers.map((driver) => (
+                        <option key={driver.id} value={driver.id}>
+                          {driver.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <Clock size={16} className="inline mr-1" />
+                      Jam Mulai Rencana
+                    </label>
+                    <input
+                      type="time"
+                      value={formData.plan_start_time}
+                      onChange={(e) =>
+                        setFormData({ ...formData, plan_start_time: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <Clock size={16} className="inline mr-1" />
+                      Jam Selesai Rencana
+                    </label>
+                    <input
+                      type="time"
+                      value={formData.plan_end_time}
+                      onChange={(e) =>
+                        setFormData({ ...formData, plan_end_time: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Location Information */}
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-lg font-medium text-gray-800 mb-4">
+                  Informasi Lokasi
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <MapPin size={16} className="inline mr-1" />
+                      Lokasi Pickup
+                    </label>
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={`Latitude: ${selectedDelivery.depart_lat}`}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-sm"
+                      />
+                      <input
+                        type="text"
+                        value={`Longitude: ${selectedDelivery.depart_lon}`}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <MapPin size={16} className="inline mr-1" />
+                      Lokasi Tujuan
+                    </label>
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={`Latitude: ${selectedDelivery.arrive_lat}`}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-sm"
+                      />
+                      <input
+                        type="text"
+                        value={`Longitude: ${selectedDelivery.arrive_lon}`}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actual Times */}
+              {(selectedDelivery.start_time || selectedDelivery.end_time) && (
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-lg font-medium text-gray-800 mb-4">
+                    Waktu Aktual
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Waktu Mulai Aktual
+                      </label>
+                      <input
+                        type="text"
+                        value={selectedDelivery.start_time ? dayjs(selectedDelivery.start_time).format("DD/MM/YYYY HH:mm") : "Belum dimulai"}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Waktu Selesai Aktual
+                      </label>
+                      <input
+                        type="text"
+                        value={selectedDelivery.end_time ? dayjs(selectedDelivery.end_time).format("DD/MM/YYYY HH:mm") : "Belum selesai"}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <CheckCircle size={16} />
+                  Simpan Perubahan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
